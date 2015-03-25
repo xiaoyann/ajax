@@ -1,3 +1,5 @@
+// 待增加功能
+// 1. jsonp
 var ajax = (function(window) {
 
     var config = {
@@ -17,7 +19,7 @@ var ajax = (function(window) {
             var ret = []
             if (typeof ret === 'object') {
                 for (var key in data) {
-                    ret.push(key + '=' + data[key])
+                    ret.push(encodeURIComponent(key) + '=' + encodeURIComponent(data[key]))
                 }
             }
             return ret.join('&')
