@@ -30,7 +30,7 @@ var ajax = (function(window) {
         if (window.JSON) {
             return JSON.parse(data)
         } else {
-            return (new Function('return '+ data))();
+            return (new Function('return '+ data))()
         }
     }
 
