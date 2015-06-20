@@ -26,6 +26,14 @@ var ajax = (function(window) {
         }
     }
 
+    function parseJSON(data) {
+        if (window.JSON) {
+            return JSON.parse(data)
+        } else {
+            return (new Function('return '+ data))();
+        }
+    }
+
     return function(options) {
 
         var xhr = config.createXHR(), 
@@ -71,7 +79,7 @@ var ajax = (function(window) {
                     var resp = xhr.responseText, dataType = mimeType || xhr.getResponseHeader('content-type')
 
                     if (dataType === 'application/json') {
-                        resp = JSON.parse(resp)
+                        resp = parseJSON(resp)
                     } else if (/^(?:text|application)\/xml/.test(dataType)) {
                         resp = xhr.responseXML
                     }
