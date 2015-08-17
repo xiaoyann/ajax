@@ -90,7 +90,7 @@ var ajax = (function(window) {
 
                 } else {
                     if (typeof options.error === 'function') {
-                        option.error(xhr)
+                        options.error(xhr)
                     }
                 }
             }
