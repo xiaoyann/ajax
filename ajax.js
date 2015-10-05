@@ -12,7 +12,10 @@ var ajax = (function(window) {
         },
 
         // 不考虑IE6的情况下可以直接使用XMLHttpRequest，因为IE从IE7起就已实现了XMLHttpRequest
-        createXHR: window.ActiveObject === undefined ? function() { return new XMLHttpRequest() } : function() { return new window.ActiveObject('Microsoft.XMLHTTP') },
+        createXHR: window.ActiveObject !== undefined ?
+            function() {
+                return createStandardXHR() || createActiveXHR()
+            } : createStandardXHR,
         
         // 将data转换成字符串
         queryString: function(data) {
@@ -106,6 +109,18 @@ var ajax = (function(window) {
 
         // xhr.send
         xhr.send(queryString)
+    }
+
+    function createStandardXHR() {
+        try {
+            return new XMLHttpRequest()
+        } catch(e) {}
+    }
+
+    function createActiveXHR() {
+        try {
+            return new window.ActiveXObject('Microsoft.XMLHTTP')
+        } catch(e) {}
     }
 
 })(window)
