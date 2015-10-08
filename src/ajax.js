@@ -8,127 +8,117 @@
 ;(function(window) {
 
     'use strict';
+
+    /**
+     * 约定：假设当前作用域是全局作用域，以 _ 开头的变量(不包括函数)表示是全局的
+     */
     
     var // 基本配置
         _options = {},
         // 匹配所有资源类型，这样写是为了避免被构建工具干掉
         _allType = '*/' + '*',
         // IE 下使用 AcitveXObject 创建 XHR 的版本标记
-        msValidXHRTag,
+        _msValidXHRTag,
         // copy from the jQuery 用于将URL的各个组成部分分割到一个数组
-        rurl = /^([\w.+-]+:)(?:\/\/(?:[^\/?#]*@|)([^\/?#:]*)(?::(\d+)|)|)/,
+        _rurl = /^([\w.+-]+:)(?:\/\/(?:[^\/?#]*@|)([^\/?#:]*)(?::(\d+)|)|)/,
         // 当前页面URL的组成部分
-        pParts = rurl.exec(document.URL.toLowerCase()) || [],
+        _pParts = _rurl.exec(document.URL.toLowerCase()) || [],
         // 检测属性是否属于自己
         hasOwnProp = Object.prototype.hasOwnProperty;
-        
 
-    
-    /**
-     * [ajax description]
-     * @param  {[object]} opt [description]
-     * @return {[type]}       [description]
-     */
-    function ajax(opt) {
+
+    function ajax(opts) {
 
         var // XMLHttpRequest 实例
             xhr,
-            // 合并选项
-            options = mergeOptions(mergeOptions({}, _options), opt),
-            // 请求是否需要提交数据
-            needSendData,
-            // request headers
-            reqHeaders = {},
+            //
+            promise,
             // 超时定时器
-            timeoutTimer;
-
-        // 纠正 method
-        options.method = ((options.method || 'GET') + '').toUpperCase();
-
-        // 纠正URL 
-        options.url = (options.url + '').replace(/^\/\//, pParts[1] + '//');
-
-        // 检测是否跨域
-        if (options.crossDomain !== true) {
-            options.crossDomain = isCrossDomain(options.url);
-        }
-
-        // 发送 GET/HEAD 请求时，把要提交的数据放在 url query 上
-        needSendData = !/^(?:GET|HEAD)/.test(options.method);
-
-        // 纠正 dataType
-        var dataType = (options.dataType + '').toLowerCase();
-        options.dataType = options.accepts[dataType] ? dataType : '*';
-
-        // 将 data 格式化为 string
-        var reqData = options.data;
-        if (options.processData && reqData && typeof reqData !== 'string') {
-            options.data = serializeData(options.data);
-        }
-
-        if (!needSendData) {
-            var reqUrl = options.url;
-            // 将 data 追加到 url 的 query 上
-            if (options.data) {
-                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + options.data;
-                delete options.data;
-            }
-            // 添加时间戳来禁止缓存
-            if (options.cache === false) {
-                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + '_=' + +(new Date());
-            }
-            options.url = reqUrl;
-        }
+            timeoutTimer,
+            // 请求状态改变时的处理回调
+            callback,
+            // 选项
+            options = processOptions(opts),
+            // request headers
+            reqHeaders = options.headers,
+            
+        // 调用 beforeSend
 
         xhr = options.createXHR();
 
         xhr.open(options.method, options.url, options.async, options.username, options.password);
 
-        // 设置 Accept
-        var accept = options.accepts[options.dataType];
-        reqHeaders.Accept = accept.indexOf(_allType) === -1 ? accept + ', '+ _allType +'; q=0.01' : accept;
-
-        // 设置 Content-Type
-        if (needSendData && options.data && options.contentType) {
-            reqHeaders['Content-Type'] = options.contentType;
-        }
-
-        // 添加Ajax标识 X-Requested-With
-        if (!options.crossDomain) {
-            reqHeaders['X-Requested-With'] = 'XMLHttpRequest';
-        }
-
-        // 设置 Request Headers
-        mergeOptions(reqHeaders, options.headers);
+        // 设置 request header
         for (var hName in reqHeaders) {
             if (reqHeaders[hName] !== undefined) {
                 xhr.setRequestHeader(hName, reqHeaders[hName] + '');
             }
         }
 
-        // 覆盖 mimeType
+        // 因为服务器可能返回不正确的 mimeType，所以如果我们自己知道请求的内容类型就可以进行覆盖，
+        // 让浏览器收到响应后使用我们自己设置的 mimeType 来解析
         if (xhr.overrideMimeType && (options.mimeType || reqHeaders.Accept !== _allType)) {
             xhr.overrideMimeType(options.mimeType || reqHeaders.Accept.split(',')[0]);
         }
 
-        // 请求超时后取消请求，同步请求不用设置超时处理
+        // 在使用 Ajax 时，设置超时时间的可能性明显是要大于设置 async，
+        // 所以理论上先检测 timeout 可以减少检测 async 的次数
         if (options.timeout > 0 && options.async) {
             timeoutTimer = setTimeout(function() {
                 xhr.abort();
             }, options.timeout);
         }
 
-        xhr.onreadystatechange = function() {
-            // alert(xhr.readyState + '--' + xhr.status);
-        };
+        callback = function() {
+            var status;
 
-        xhr.send((needSendData && options.data) || null);
+            if (xhr.readyState !== 4) { return; }
+
+            // 如果 XHR 是使用 IE 的 ActiveXObject 创建的，报告204时会被设置成1223
+            status = xhr.status === 1223 && _msValidXHRTag  ? 204 : xhr.status;
+
+            // 成功
+            if (status >= 200 && status < 300 || status === 304) {
+                // 解析响应
+
+
+            // 失败
+            } else {
+
+
+            }
+
+            // 无论成功还是失败
+
+
+
+            console.log(xhr);
+            
+            if (timeoutTimer) { clearTimeout(timeoutTimer); }
+            
+            xhr.onreadystatechange = noop;
+            
+            xhr = callback = null;
+        };
+        
+        if (!options.async) {
+            callback();
+
+        // 此处应该有解释    
+        } else if(xhr.readyState === 4) {
+            setTimeout(callback);
+
+        } else {
+            xhr.onreadystatechange = callback;
+        }
+
+        xhr.send((options.needSendData && options.data) || null);
+
+        return promise;
     }
 
     /**
-     * [setOptions description]
-     * @param  {[type]} opt [description]
-     * @return {[type]}     [description]
+     * [setOptions 用于设置全局选项]
      */
     ajax.setOptions = function(opt) {
         return mergeOptions(_options, opt);
@@ -194,7 +184,7 @@
     
     ajax.setOptions({
         // 当前页面是否是本地协议 copy from the jQuery
-        isLocal: /^(?:about|app|app-storage|.+-extension|file|res|widget):$/.test(pParts[1]),
+        isLocal: /^(?:about|app|app-storage|.+-extension|file|res|widget):$/.test(_pParts[1]),
         // IE7 虽然实现了 XMLHttpRequest，但是与标准的还是存在差异，不支持本地协议
         // 如果是在 IE7 下并且使用的本地协议，就直接使用非标准的 XHR，否则先尝试创建标准的 XHR，失败后再使用非标准的
         createXHR: window.ActiveXObject ? 
@@ -203,7 +193,76 @@
     });
 
     /**
-     * [serializeData 参考 jQuery]
+     * [processOptions 加工处理选项]
+     */
+    function processOptions(opts) {
+        var reqHeaders = {}, needSendData,
+            options = mergeOptions(mergeOptions({}, _options), opts);
+        
+        // 纠正 method
+        options.method = ((options.method || 'GET') + '').toUpperCase();
+
+        // 纠正URL 
+        options.url = (options.url + '').replace(/^\/\//, _pParts[1] + '//');
+
+        // 检测是否跨域
+        if (options.crossDomain !== true) {
+            options.crossDomain = isCrossDomain(options.url);
+        }
+
+        // 发送 GET/HEAD 请求时，把要提交的数据放在 url query 上
+        needSendData = !/^(?:GET|HEAD)/.test(options.method);
+
+        // 纠正 dataType
+        var dataType = (options.dataType + '').toLowerCase();
+        options.dataType = options.accepts[dataType] ? dataType : '*';
+
+        // 将 data 格式化为 string
+        var reqData = options.data;
+        if (options.processData && reqData && typeof reqData !== 'string') {
+            options.data = serializeData(options.data);
+        }
+
+        var reqUrl;
+        if (!needSendData) {
+            reqUrl = options.url
+            // 将 data 追加到 url 的 query 上
+            if (options.data) {
+                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + options.data;
+                delete options.data;
+            }
+            // 添加时间戳来禁止缓存
+            if (options.cache === false) {
+                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + '_=' + +(new Date());
+            }
+            options.url = reqUrl;
+        }
+
+        // q=0.01 表示权重，数字越小权重越小
+        var accept = options.accepts[options.dataType];
+        reqHeaders.Accept = accept.indexOf(_allType) === -1 ? accept + ', '+ _allType +'; q=0.01' : accept;
+
+        if (needSendData && options.data && options.contentType) {
+            reqHeaders['Content-Type'] = options.contentType;
+        }
+
+        // 其实这对首字段只是一个约定
+        if (!options.crossDomain) {
+            reqHeaders['X-Requested-With'] = 'XMLHttpRequest';
+        }
+
+        options.headers = mergeOptions(reqHeaders, options.headers);
+
+        options.needSendData = needSendData;
+
+        return options;
+    }
+
+    // 空函数
+    function noop() {}
+
+    /**
+     * [serializeData 序列化 data，参考 jQuery]
      * @param  {[type]} obj   [description]
      * @return {[string]}     [description]
      */
@@ -248,7 +307,6 @@
 
     /**
      * [createStandardXHR 创建标准的XMLHttpRequest对象]
-     * @return {[type]} [description]
      */
     function createStandardXHR() {
         try {
@@ -258,20 +316,19 @@
 
     /**
      * [createActiveXHR 创建非标准的XMLHttpRequest对象]
-     * @return {[type]} [description]
      */
     function createActiveXObjectXHR() {
-        if (!msValidXHRTag) {
-            msValidXHRTag = getValidMSXHRTag();
+        if (!_msValidXHRTag) {
+            _msValidXHRTag = getValidMSXHRTag();
         }
         try {
-            return new ActiveXObject(msValidXHRTag);
+            return new ActiveXObject(_msValidXHRTag);
         } catch(e) {}
     }
 
     /**
      * [getValidMSXHRTag 在IE下获取可用的XHR版本标识]
-     * @return {[type]} [description]
+     * @return {[string]} [description]
      */
     function getValidMSXHRTag() {
         var msValidXHRTag, xhr,
@@ -294,9 +351,6 @@
     /**
      * [mergeOptions 合并选项]
      * 这里使用了 for in 来遍历数组，有问题吗？
-     * @param  {[type]} target [description]
-     * @param  {[type]} source [description]
-     * @return {[type]}        [description]
      */
     function mergeOptions(target, source) {
         var key, val, tVal, isArr = isArray(target);
@@ -329,8 +383,6 @@
     /**
      * [isPlainObject 还需要优化]
      * null 在IE8/7下使用 toString 会返回 [object Object]
-     * @param  {[type]}  obj [description]
-     * @return {Boolean}     [description]
      */
     function isPlainObject(obj) {
         return !!obj && Object.prototype.toString.call(obj) === '[object Object]';
@@ -338,34 +390,25 @@
 
     /**
      * [isArray 还需要优化]
-     * @param  {[type]}  obj [description]
-     * @return {Boolean}     [description]
      */
     function isArray(obj) {
         return Object.prototype.toString.call(obj) === '[object Array]';
     }
 
-    /**
-     * [isFunction 检测是否是函数]
-     * @param  {[type]}  obj [description]
-     * @return {Boolean}     [description]
-     */
     function isFunction(obj) {
         return typeof obj === 'function';
     }
 
     /**
-     * [isCrossDomain 参考jQuery]
+     * [isCrossDomain 检测跨域，参考jQuery]
      * @param  {[string]}  url [description]
      * @return {Boolean}     [description]
      */
     function isCrossDomain(reqUrl) {
-        //  reqUrl parts 需要去请求的URL的组成部分 
-        var rParts = rurl.exec(reqUrl.toLowerCase());
-
+        var rParts = _rurl.exec(reqUrl.toLowerCase());
         // 1:protocol, 2:domain, 3:port
-        return !!rParts && (rParts[1] !== pParts[1] || rParts[2] !== pParts[2] || 
-                (rParts[3] || (rParts[1] === 'http:' ? '80' : '443')) !== (pParts[3] || (pParts[1] === 'http:' ? '80' : '443')));
+        return !!rParts && (rParts[1] !== _pParts[1] || rParts[2] !== _pParts[2] || 
+                (rParts[3] || (rParts[1] === 'http:' ? '80' : '443')) !== (_pParts[3] || (_pParts[1] === 'http:' ? '80' : '443')));
     }
 
     window.ajax = ajax;
