@@ -218,16 +218,19 @@
             if (typeof callback === 'function') {
                 this.alwaysCallbacks.push(callback);
             }
+            return this;
         },
         success: function(callback) {
             if (typeof callback === 'function') {
                 this.doneCallbacks.push(callback);
             }
+            return this;
         },
         error: function(callback) {
             if (typeof callback === 'function') {
                 this.failCallbacks.push(callback);
             }
+            return this;
         }
     };
 
