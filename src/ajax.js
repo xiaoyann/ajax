@@ -14,11 +14,46 @@
      */
     
     var // 基本配置
-        _options = {},
+        _options = {
+            // 请求地址
+            url: '',
+            // 请求方法
+            method: 'GET',
+            // 请求参数
+            data: null,
+            // 是否异步
+            async: true,
+            // 自定义请求首部
+            headers: null,
+            // 以哪种数据类型解析返回结果
+            dataType: '',
+            // 是否需要处理data参数
+            processData: true,
+            // 超时时间(毫秒)
+            timeout: 0,
+            // 是否允许浏览器缓存
+            cache: true,
+            // 是否跨越
+            crossDomain: false,
+            // 回调执行上下文
+            context: null,
+            // 请求发送前调用此函数，函数返回false将取消发送这个请求
+            beforeSend: null,
+            // 过滤请求结果
+            dataFilter: null,
+            // 请求成功后调用此函数
+            success: null,
+            // 请求失败后调用此函数
+            error: null,
+            // 请求完成后，无论成功还是失败，都将调用此函数
+            complete: null,
+            // 响应HTTP访问认证请求的用户名
+            username: null,
+            // 响应HTTP访问认证请求的密码
+            password: null
+        },
         // 匹配所有资源类型，这样写是为了避免被构建工具干掉
         _allType = '*/' + '*',
-        // IE 下使用 AcitveXObject 创建 XHR 的版本标记
-        _msValidXHRTag,
         // copy from the jQuery 用于将URL的各个组成部分分割到一个数组
         _rurl = /^([\w.+-]+:)(?:\/\/(?:[^\/?#]*@|)([^\/?#:]*)(?::(\d+)|)|)/,
         // 当前页面URL的组成部分
@@ -31,7 +66,7 @@
 
         var // XMLHttpRequest 实例
             xhr,
-            //
+            // todo
             promise,
             // 超时定时器
             timeoutTimer,
@@ -40,7 +75,7 @@
             // 选项
             options = processOptions(opts),
             // request headers
-            reqHeaders = options.headers,
+            reqHeaders = options.headers;
             
         // 调用 beforeSend
 
@@ -61,16 +96,8 @@
             xhr.overrideMimeType(options.mimeType || reqHeaders.Accept.split(',')[0]);
         }
 
-        // 在使用 Ajax 时，设置超时时间的可能性明显是要大于设置 async，
-        // 所以理论上先检测 timeout 可以减少检测 async 的次数
-        if (options.timeout > 0 && options.async) {
-            timeoutTimer = setTimeout(function() {
-                xhr.abort();
-            }, options.timeout);
-        }
-
         callback = function() {
-            var status;
+            var status, response = '', converter;
 
             if (xhr.readyState !== 4) { return; }
 
@@ -79,27 +106,39 @@
 
             // 成功
             if (status >= 200 && status < 300 || status === 304) {
-                // 解析响应
 
+                response = getResponse(options, xhr);
+
+                if (typeof options.success === 'function') {
+                    options.success.call(options.context, response);
+                }
 
             // 失败
             } else {
-
-
+                if (typeof options.error === 'function') {
+                    options.error.call(options.context);
+                }
             }
 
             // 无论成功还是失败
+            if (typeof options.complete === 'function') {
+                options.complete.call(options.context);
+            }
 
-
-
-            console.log(xhr);
-            
             if (timeoutTimer) { clearTimeout(timeoutTimer); }
             
             xhr.onreadystatechange = noop;
             
             xhr = callback = null;
         };
+
+        // 在使用 Ajax 时，设置超时时间的可能性明显是要大于设置 async，
+        // 所以理论上先检测 timeout 可以减少检测 async 的次数
+        if (options.timeout > 0 && options.async) {
+            timeoutTimer = setTimeout(function() {
+                xhr.abort();
+            }, options.timeout);
+        }
         
         if (!options.async) {
             callback();
@@ -123,64 +162,35 @@
     ajax.setOptions = function(opt) {
         return mergeOptions(_options, opt);
     };
-
+    
     ajax.setOptions({
-        // 请求地址
-        url: '',
-        // 请求方法
-        method: 'GET',
-        // 请求参数
-        data: null,
-        // 是否异步
-        async: true,
-        // 请求头
-        headers: null,
         // 内容类型，告诉XHR使用哪种数据类型解析返回结果
         mimeType: '',
         // 使用什么数据类型发送数据到服务器
         contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
-        // 是否需要处理data参数
-        processData: true,
-        // 超时时间(毫秒)
-        timeout: 0,
-        // 是否允许浏览器缓存
-        cache: true,
-        // 以哪种数据类型解析返回结果
-        dataType: null,
-        // 是否跨越
-        crossDomain: false,
-        // 回调执行上下文
-        context: null,
-        // 请求发送前调用此函数，函数返回false将取消发送这个请求
-        beforeSend: null,
-        // 过滤请求结果
-        dataFilter: null,
-        // 请求成功后调用此函数
-        success: null,
-        // 请求失败后调用此函数
-        error: null,
-        // 请求完成后，无论成功还是失败，都将调用此函数
-        complete: null,
-        // 指定jsonp的回调函数名称
-        jsonp: 'jsonp',
-        jsonpCallback: function() {},
-        // 响应HTTP访问认证请求的用户名
-        username: null,
-        // 响应HTTP访问认证请求的密码
-        password: null
-    });
-    
-    ajax.setOptions({
         // 内容类型，告诉服务器该请求接受哪种类型的返回结果
         accepts: {
-            '*': _allType,
             text: 'text/plain',
             html: 'text/html',
             xml: 'application/xml, text/xml',
             json: 'application/json, text/javascript',
             script: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript"
+        },
+        // 内容转换
+        converters: {
+            text: null,
+            html: null,
+            xml: parseXML,
+            json: parseJSON,
+            script: null
         }
     });
+
+    // ajax.setOptions({
+    //     // 指定jsonp的回调函数名称
+    //     jsonp: 'jsonp',
+    //     jsonpCallback: function() {}
+    // });
     
     ajax.setOptions({
         // 当前页面是否是本地协议 copy from the jQuery
@@ -191,6 +201,25 @@
                 ((this.isLocal && /MSIE\s?(?:7)\.0/.test(navigator.userAgent)) || createStandardXHR() ? createActiveXObjectXHR : createStandardXHR) 
             : createStandardXHR
     });
+
+    function getResponse(s, xhr) {
+        var response = '', contentType, converter;
+
+        try {
+            response = xhr.responseText;
+        } catch(e) {}
+
+        if (response !== '') {
+            contentType = s.dataType || s.mimeType || xhr.getResponseHeader('Content-Type');
+            converter = s.converters[contentType.toLowerCase()];
+            
+            if (typeof converter === 'function') {
+                response = converter(response);
+            }
+        }
+
+        return response;
+    }
 
     /**
      * [processOptions 加工处理选项]
@@ -214,8 +243,7 @@
         needSendData = !/^(?:GET|HEAD)/.test(options.method);
 
         // 纠正 dataType
-        var dataType = (options.dataType + '').toLowerCase();
-        options.dataType = options.accepts[dataType] ? dataType : '*';
+        options.dataType = (options.dataType + '').toLowerCase();
 
         // 将 data 格式化为 string
         var reqData = options.data;
@@ -240,7 +268,7 @@
 
         // q=0.01 表示权重，数字越小权重越小
         var accept = options.accepts[options.dataType];
-        reqHeaders.Accept = accept.indexOf(_allType) === -1 ? accept + ', '+ _allType +'; q=0.01' : accept;
+        reqHeaders.Accept = accept ? accept + ', '+ _allType +'; q=0.01' : _allType;
 
         if (needSendData && options.data && options.contentType) {
             reqHeaders['Content-Type'] = options.contentType;
@@ -260,6 +288,47 @@
 
     // 空函数
     function noop() {}
+
+    /**
+     * [parseJSON description]
+     * @param  {[type]} data [description]
+     * @return {[type]}      [description]
+     */
+    function parseJSON(data) {
+        if (window.JSON && window.JSON.parse) {
+            return window.JSON.parse(data + '');
+        }
+        return (Function('return ' + data))();
+    }
+
+    /**
+     * [parseXML description]
+     * @param  {[type]} data [description]
+     * @return {[type]}      [description]
+     */
+    function parseXML(data) {
+        var xmldom = null, errors = '';
+
+        try {
+            if (window.DOMParser) {
+                xmldom = (new window.DOMParser()).parseFromString(data, 'text/xml');
+                errors = xmldom.getElementsByTagName('parsererror');
+            } else if (window.ActiveXObject) {
+                xmldom = new window.ActiveXObject(getValidMSXMLVersion());
+                xmldom.loadXML(data);
+                errors = xmldom.parseError != 0 ? xmldom.parseError.reason : '';
+            }
+        } catch(e) { 
+            xmldom = null; 
+        }
+
+        if (errors.length > 0) {
+            xmldom = null;
+        }
+
+        return xmldom;
+    }
+
 
     /**
      * [serializeData 序列化 data，参考 jQuery]
@@ -318,34 +387,54 @@
      * [createActiveXHR 创建非标准的XMLHttpRequest对象]
      */
     function createActiveXObjectXHR() {
-        if (!_msValidXHRTag) {
-            _msValidXHRTag = getValidMSXHRTag();
-        }
         try {
-            return new ActiveXObject(_msValidXHRTag);
+            return new ActiveXObject(getValidMSXHRVersion());
         } catch(e) {}
     }
 
     /**
-     * [getValidMSXHRTag 在IE下获取可用的XHR版本标识]
+     * [getValidMSXHRVersion 在IE下获取可用的XHR版本标识]
      * @return {[string]} [description]
      */
-    function getValidMSXHRTag() {
-        var msValidXHRTag, xhr,
-            msXHRTags = ['Msxml2.XMLHTTP.6.0', 'Msxml2.XMLHTTP.3.0', 'Msxml2.XMLHTTP'];
+    function getValidMSXHRVersion() {
+        var validVersion = getValidMSXHRVersion.validVersion || '', xhr,
+            versions = ['Msxml2.XMLHTTP.6.0', 'Msxml2.XMLHTTP.3.0', 'Msxml2.XMLHTTP'];
 
-        while ((msValidXHRTag = msXHRTags.shift()) !== undefined) {
-            try {
-                xhr = new window.ActiveXObject(msValidXHRTag);
-            } catch(e) {}
-            
-            if (xhr) { 
-                xhr = null; break; 
-            } else {
-                msValidXHRTag = undefined;
+        if (!validVersion) {
+            while ((validVersion = versions.shift()) !== undefined) {
+                try {
+                    xhr = new window.ActiveXObject(validVersion);
+                    getValidMSXHRVersion.validVersion = validVersion;
+                    break;
+                } catch(e) {
+                    validVersion = '';
+                }
+             }
+        }
+        return validVersion;
+    }
+
+    /**
+     * [getValidMSXMLVersion]
+     * @return {[string]} [description]
+     */
+    function getValidMSXMLVersion() {
+        var validVersion = getValidMSXMLVersion.validVersion || '', xmldom,
+            versions = ['MSXML2.DOMDocument.6.0', 'MSXML2.DOMDocument.3.0', 'MSXML2.DOMDocument'];
+        
+        if (!validVersion) {
+            while ((validVersion = versions.shift()) !== undefined) {
+                try {
+                    xmldom = new window.ActiveXObject(validVersion);
+                    getValidMSXMLVersion.validVersion = validVersion;
+                    break;
+                } catch(e) {
+                    validVersion = '';
+                }
             }
         }
-        return msValidXHRTag;
+
+        return validVersion;
     }
 
     /**
