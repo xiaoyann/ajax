@@ -79,9 +79,7 @@
             
         // 调用 beforeSend
 
-        deferred.success(options.success);
-        deferred.error(options.error);
-        deferred.always(options.complete);
+        deferred.success(options.success).error(options.error).always(options.complete);
 
         xhr = options.createXHR();
 
@@ -149,7 +147,7 @@
         xhr.send((options.needSendData && options.data) || null);
 
         return deferred;
-    }
+}
 
     /**
      * [setOptions 用于设置全局选项]
