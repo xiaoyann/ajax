@@ -66,18 +66,22 @@
 
         var // XMLHttpRequest 实例
             xhr,
-            // todo
-            promise,
             // 超时定时器
             timeoutTimer,
             // 请求状态改变时的处理回调
             callback,
+            // 
+            deferred = new Deferred(),
             // 选项
             options = processOptions(opts),
             // request headers
             reqHeaders = options.headers;
             
         // 调用 beforeSend
+
+        deferred.success(options.success);
+        deferred.error(options.error);
+        deferred.always(options.complete);
 
         xhr = options.createXHR();
 
@@ -109,20 +113,11 @@
 
                 response = getResponse(options, xhr);
 
-                if (typeof options.success === 'function') {
-                    options.success.call(options.context, response);
-                }
+                deferred.resolve(response);
 
             // 失败
             } else {
-                if (typeof options.error === 'function') {
-                    options.error.call(options.context);
-                }
-            }
-
-            // 无论成功还是失败
-            if (typeof options.complete === 'function') {
-                options.complete.call(options.context);
+                deferred.reject(response);
             }
 
             if (timeoutTimer) { clearTimeout(timeoutTimer); }
@@ -153,7 +148,7 @@
 
         xhr.send((options.needSendData && options.data) || null);
 
-        return promise;
+        return deferred;
     }
 
     /**
@@ -202,6 +197,52 @@
             : createStandardXHR
     });
 
+    /**
+     * [Deferred 暂时简单点]
+     */
+    function Deferred() {
+        this.doneCallbacks = [];
+        this.failCallbacks = [];
+        this.alwaysCallbacks = [];
+    }
+
+    Deferred.prototype = {
+        constructor: Deferred,
+        resolve: function(param) {
+            execute(this.doneCallbacks.concat(this.alwaysCallbacks), param);
+        },  
+        reject: function(param) {
+            execute(this.failCallbacks.concat(this.alwaysCallbacks), param);
+        },
+        always: function(callback) {
+            if (typeof callback === 'function') {
+                this.alwaysCallbacks.push(callback);
+            }
+        },
+        success: function(callback) {
+            if (typeof callback === 'function') {
+                this.doneCallbacks.push(callback);
+            }
+        },
+        error: function(callback) {
+            if (typeof callback === 'function') {
+                this.failCallbacks.push(callback);
+            }
+        }
+    };
+
+    function execute(lists, param) {
+        var callback;
+        while ((callback = lists.shift()) !== undefined) {
+            if (typeof callback === 'function') {
+                callback(param);
+            }
+        }
+    }
+
+    /**
+     * [getResponse]
+     */
     function getResponse(s, xhr) {
         var response = '', contentType, converter;
 
