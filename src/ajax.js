@@ -52,9 +52,10 @@
             // 响应HTTP访问认证请求的密码
             password: null
         },
+        _transports = {},
         // 匹配所有资源类型，这样写是为了避免被构建工具干掉
         _allType = '*/' + '*',
-        // copy from the jQuery 用于将URL的各个组成部分分割到一个数组
+        // copy from the jQuery 用于将URL的各个组成部分匹配到一个数组
         _rurl = /^([\w.+-]+:)(?:\/\/(?:[^\/?#]*@|)([^\/?#:]*)(?::(\d+)|)|)/,
         // 当前页面URL的组成部分
         _pParts = _rurl.exec(document.URL.toLowerCase()) || [],
@@ -64,96 +65,220 @@
 
     function ajax(opts) {
 
-        var // XMLHttpRequest 实例
-            xhr,
-            // 超时定时器
-            timeoutTimer,
-            // 请求状态改变时的处理回调
-            callback,
-            // 
+        var 
+            transport,
+            timeoutTimer, 
+            reqHeaders = {}, 
             deferred = new Deferred(),
-            // 选项
-            options = processOptions(opts),
-            // request headers
-            reqHeaders = options.headers;
-            
+            options = mergeOptions(mergeOptions({}, _options), opts);
+
         // 调用 beforeSend
 
         deferred.success(options.success).error(options.error).always(options.complete);
-
-        xhr = options.createXHR();
-
-        xhr.open(options.method, options.url, options.async, options.username, options.password);
-
-        // 设置 request header
-        for (var hName in reqHeaders) {
-            if (reqHeaders[hName] !== undefined) {
-                xhr.setRequestHeader(hName, reqHeaders[hName] + '');
-            }
-        }
-
-        // 因为服务器可能返回不正确的 mimeType，所以如果我们自己知道请求的内容类型就可以进行覆盖，
-        // 让浏览器收到响应后使用我们自己设置的 mimeType 来解析
-        if (xhr.overrideMimeType && (options.mimeType || reqHeaders.Accept !== _allType)) {
-            xhr.overrideMimeType(options.mimeType || reqHeaders.Accept.split(',')[0]);
-        }
-
-        callback = function() {
-            var status, response = '', converter;
-
-            if (xhr.readyState !== 4) { return; }
-
-            // 如果 XHR 是使用 IE 的 ActiveXObject 创建的，报告204时会被设置成1223
-            status = xhr.status === 1223 && _msValidXHRTag  ? 204 : xhr.status;
-
-            // 成功
-            if (status >= 200 && status < 300 || status === 304) {
-
-                response = getResponse(options, xhr);
-
-                deferred.resolve(response);
-
-            // 失败
-            } else {
-                deferred.reject(response);
-            }
-
-            if (timeoutTimer) { clearTimeout(timeoutTimer); }
-            
-            xhr.onreadystatechange = noop;
-            
-            xhr = callback = null;
-        };
-
-        // 在使用 Ajax 时，设置超时时间的可能性明显是要大于设置 async，
-        // 所以理论上先检测 timeout 可以减少检测 async 的次数
-        if (options.timeout > 0 && options.async) {
-            timeoutTimer = setTimeout(function() {
-                xhr.abort();
-            }, options.timeout);
-        }
         
-        if (!options.async) {
-            callback();
+        // 纠正 method
+        options.method = ((options.method || 'GET') + '').toUpperCase();
 
-        // 此处应该有解释    
-        } else if(xhr.readyState === 4) {
-            setTimeout(callback);
+        // 纠正URL 
+        options.url = (options.url + '').replace(/^\/\//, _pParts[1] + '//');
+
+        // 检测是否跨域
+        if (options.crossDomain !== true) {
+            options.crossDomain = isCrossDomain(options.url);
+        }
+
+        // 发送 GET/HEAD 请求时，把要提交的数据放在 url query 上
+        options.hasContent = !/^(?:GET|HEAD)/.test(options.method);
+
+        // 纠正 dataType
+        options.dataType = (options.dataType + '').toLowerCase();
+
+        // 将 data 格式化为 string
+        var reqData = options.data;
+        if (options.processData && reqData && typeof reqData !== 'string') {
+            options.data = serializeData(options.data);
+        }
+
+        var reqUrl;
+        if (!options.hasContent) {
+            reqUrl = options.url
+            // 将 data 追加到 url 的 query 上
+            if (options.data) {
+                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + options.data;
+                delete options.data;
+            }
+            // 添加时间戳来禁止缓存
+            if (options.cache === false) {
+                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + '_=' + +(new Date());
+            }
+            options.url = reqUrl;
+        }
+
+        // q=0.01 表示权重，数字越小权重越小
+        var accept = options.accepts[options.dataType];
+        reqHeaders.Accept = accept ? accept + ', '+ _allType +'; q=0.01' : _allType;
+
+        if (options.hasContent && options.data && options.contentType) {
+            reqHeaders['Content-Type'] = options.contentType;
+        }
+
+        options.headers = mergeOptions(reqHeaders, options.headers);
+
+        transport = getTransport(options);
+
+        if (transport) {
+            
+            var dummyXHR = transport.send(options, done);
+
+            if (options.timeout > 0 && options.async) {
+                timeoutTimer = setTimeout(function() {
+                    dummyXHR.abort(function(param) {
+                        done(0, 'timeout', '', param);
+                    });
+                }, options.timeout);
+            }
 
         } else {
-            xhr.onreadystatechange = callback;
+            done(-1, 'No transport');
         }
 
-        xhr.send((options.needSendData && options.data) || null);
+        function done(status, statusText, response, xhr) {
 
-        return deferred;
-}
+            var isSuccess, error;
+
+            // 要尽早 clear 定时器
+            clearTimeout(timeoutTimer);
+
+            timeoutTimer = transport = undefined;
+
+            isSuccess = status >= 200 && status < 300 || status === 304;
+
+            if (response) {
+                response = response;
+            }
+
+            if (isSuccess) {
+
+                if (status === 204 || options.method === 'HEAD') {
+                    statusText = 'nocontent';
+                } else if (status === 304) {
+                    statusText = 'notomodified';
+                }
+
+                deferred.resolve(options.context, [response, statusText, xhr]);
+
+            } else {
+
+                deferred.reject(options.context, [xhr, statusText, error]);
+            }
+        }
+
+        return {
+            success: function(callback) {
+                deferred.success(callback);
+            },
+            error: function(callback) {
+                deferred.error(callback);
+            },
+            always: function(callback) {
+                deferred.always(callback);
+            }
+        };
+    }
 
     /**
      * [setOptions 用于设置全局选项]
      */
     ajax.setOptions = function(opt) {
         return mergeOptions(_options, opt);
+    };
+
+    //
+    _transports = {
+        xhr: {
+            send: function(options, callback) {
+
+                var xhr = options.createXHR(), onReady,
+                    reqHeaders = options.headers;
+
+                xhr.open(options.method, options.url, options.async, options.username, options.password);
+
+                if (!options.crossDomain) {
+                    reqHeaders['X-Requested-With'] = 'XMLHttpRequest';
+                }
+
+                // 设置 request header
+                for (var name in reqHeaders) {
+                    if (reqHeaders[name] !== undefined) {
+                        xhr.setRequestHeader(name, reqHeaders[name] + '');
+                    }
+                }
+
+                // 因为服务器可能返回不正确的 mimeType，所以如果我们自己知道请求的内容类型就可以进行覆盖，
+                // 让浏览器收到响应后使用我们自己设置的 mimeType 来解析
+                if (xhr.overrideMimeType && (options.mimeType || reqHeaders.Accept !== _allType)) {
+                    xhr.overrideMimeType(options.mimeType || reqHeaders.Accept.split(',')[0]);
+                }
+
+                onReady = function(event, isAbort) {
+                    var status, statusText, response;
+
+                    if (xhr.readyState === 4 || isAbort) {
+                        if (isAbort) {
+                            if (xhr.readyState !== 4) {
+                                xhr.abort();
+                            }
+
+                        } else {
+
+                            try {
+                                statusText = xhr.statusText;
+                            } catch(e) {
+                                statusText = '';
+                            }
+
+                            if (typeof xhr.responseText === 'string') {
+                                response = xhr.responseText;
+                            }
+
+                            if (!xhr.status && options.isLocal && !options.crossDomain) {
+                               status = response ? 200 : 404;
+                            } else {
+                                // 如果 XHR 是使用 IE 的 ActiveXObject 创建的，报告204时会被设置成1223
+                                status = xhr.status === 1223 ? 204 : xhr.status;
+                            }
+
+                            callback(status, statusText, response, xhr);
+                        }
+
+                        xhr.onreadystatechange = noop;
+                        onReady = null;
+                    }
+                };
+                
+                if (!options.async) {
+                    onReady();
+
+                // 此处应该有解释    
+                } else if(xhr.readyState === 4) {
+                    setTimeout(onReady);
+
+                } else {
+                    xhr.onreadystatechange = onReady;
+                }
+
+                this.xhr = xhr;
+
+                xhr.send((options.hasContent && options.data) || null);
+
+                return {
+                    abort: function(callback) {
+                        onReady(undefined, true);
+                        callback(xhr);
+                    }
+                };
+            }
+        }   
     };
     
     ajax.setOptions({
@@ -169,7 +294,7 @@
             json: 'application/json, text/javascript',
             script: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript"
         },
-        // 内容转换
+        // 配置不同类型内容对应的转换方式
         converters: {
             text: null,
             html: null,
@@ -206,11 +331,11 @@
 
     Deferred.prototype = {
         constructor: Deferred,
-        resolve: function(param) {
-            execute(this.doneCallbacks.concat(this.alwaysCallbacks), param);
+        resolve: function(context, params) {
+            execute(context, this.doneCallbacks.concat(this.alwaysCallbacks), params);
         },  
-        reject: function(param) {
-            execute(this.failCallbacks.concat(this.alwaysCallbacks), param);
+        reject: function(context, params) {
+            execute(context, this.failCallbacks.concat(this.alwaysCallbacks), params);
         },
         always: function(callback) {
             if (typeof callback === 'function') {
@@ -232,100 +357,18 @@
         }
     };
 
-    function execute(lists, param) {
+    function execute(context, lists, params) {
         var callback;
         while ((callback = lists.shift()) !== undefined) {
             if (typeof callback === 'function') {
-                callback(param);
+                callback.apply(context, params);
             }
         }
     }
 
-    /**
-     * [getResponse]
-     */
-    function getResponse(s, xhr) {
-        var response = '', contentType, converter;
 
-        try {
-            response = xhr.responseText;
-        } catch(e) {}
-
-        if (response !== '') {
-            contentType = s.dataType || s.mimeType || xhr.getResponseHeader('Content-Type');
-            converter = s.converters[contentType.toLowerCase()];
-            
-            if (typeof converter === 'function') {
-                response = converter(response);
-            }
-        }
-
-        return response;
-    }
-
-    /**
-     * [processOptions 加工处理选项]
-     */
-    function processOptions(opts) {
-        var reqHeaders = {}, needSendData,
-            options = mergeOptions(mergeOptions({}, _options), opts);
-        
-        // 纠正 method
-        options.method = ((options.method || 'GET') + '').toUpperCase();
-
-        // 纠正URL 
-        options.url = (options.url + '').replace(/^\/\//, _pParts[1] + '//');
-
-        // 检测是否跨域
-        if (options.crossDomain !== true) {
-            options.crossDomain = isCrossDomain(options.url);
-        }
-
-        // 发送 GET/HEAD 请求时，把要提交的数据放在 url query 上
-        needSendData = !/^(?:GET|HEAD)/.test(options.method);
-
-        // 纠正 dataType
-        options.dataType = (options.dataType + '').toLowerCase();
-
-        // 将 data 格式化为 string
-        var reqData = options.data;
-        if (options.processData && reqData && typeof reqData !== 'string') {
-            options.data = serializeData(options.data);
-        }
-
-        var reqUrl;
-        if (!needSendData) {
-            reqUrl = options.url
-            // 将 data 追加到 url 的 query 上
-            if (options.data) {
-                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + options.data;
-                delete options.data;
-            }
-            // 添加时间戳来禁止缓存
-            if (options.cache === false) {
-                reqUrl += (reqUrl.indexOf('?') > -1 ? '&' : '?') + '_=' + +(new Date());
-            }
-            options.url = reqUrl;
-        }
-
-        // q=0.01 表示权重，数字越小权重越小
-        var accept = options.accepts[options.dataType];
-        reqHeaders.Accept = accept ? accept + ', '+ _allType +'; q=0.01' : _allType;
-
-        if (needSendData && options.data && options.contentType) {
-            reqHeaders['Content-Type'] = options.contentType;
-        }
-
-        // 其实这对首字段只是一个约定
-        if (!options.crossDomain) {
-            reqHeaders['X-Requested-With'] = 'XMLHttpRequest';
-        }
-
-        options.headers = mergeOptions(reqHeaders, options.headers);
-
-        options.needSendData = needSendData;
-
-        return options;
+    function getTransport(s) {
+        return _transports[(s.dataType + '').toLowerCase()] || _transports.xhr;
     }
 
     // 空函数
@@ -409,7 +452,7 @@
         }
 
         function add(name, value) {
-            value = isFunction(value) ? value() : (value == null ? '' : value) ;
+            value = isFunction(value) ? value() : (value == null ? '' : value);
             s.push(encodeURIComponent(name) + '=' + encodeURIComponent(value));   
         }
 

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+</head>
+<body>
+    
+<script src="../src/ajax.js"></script>
+<script>
+    var deferred = ajax({
+        url: './data.json',
+        method: 'get',
+        data: {
+            username: 'ziyan'
+        },
+        dataType: 'json'
+    });
+
+    deferred.success(function(response, statusText, xhr) {
+        console.log(response);
+        console.log(statusText);
+        console.log(xhr);
+    });
+
+    console.log(deferred);
+</script>
+</body>
+</html>
