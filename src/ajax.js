@@ -154,7 +154,7 @@
             isSuccess = status >= 200 && status < 300 || status === 304;
 
             if (response) {
-                response = response;
+                response = convertResponse(response, options, xhr);
             }
 
             if (isSuccess) {
@@ -162,7 +162,7 @@
                 if (status === 204 || options.method === 'HEAD') {
                     statusText = 'nocontent';
                 } else if (status === 304) {
-                    statusText = 'notomodified';
+                    statusText = 'notmodified';
                 }
 
                 deferred.resolve(options.context, [response, statusText, xhr]);
@@ -373,6 +373,16 @@
 
     // 空函数
     function noop() {}
+
+    function convertResponse(response, s, xhr) {
+        var converter, 
+            dataType = s.dataType || s.mimeType || xhr.getResponseHeader('Content-Type') || '';
+            
+        converter = (dataType.match(/xml|json/) || [""])[0];
+        converter = s.converters[converter];
+
+        return typeof converter === 'function' ? converter(response) : response ;
+    }
 
     /**
      * [parseJSON description]
