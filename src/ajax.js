@@ -316,7 +316,7 @@
         // IE7 虽然实现了 XMLHttpRequest，但是与标准的还是存在差异，不支持本地协议
         // 如果是在 IE7 下并且使用的本地协议，就直接使用非标准的 XHR，否则先尝试创建标准的 XHR，失败后再使用非标准的
         createXHR: window.ActiveXObject ? 
-                ((this.isLocal && /MSIE\s?(?:7)\.0/.test(navigator.userAgent)) || createStandardXHR() ? createActiveXObjectXHR : createStandardXHR) 
+                ((this.isLocal && /MSIE\s?(?:7)\.0/.test(navigator.userAgent)) || !createStandardXHR() ? createActiveXObjectXHR : createStandardXHR) 
             : createStandardXHR
     });
 
