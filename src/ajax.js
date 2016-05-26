@@ -170,7 +170,7 @@
                 deferred.resolve(options.context, [response, statusText, xhr]);
 
             } else {
-
+                error = statusText;
                 deferred.reject(options.context, [xhr, statusText, error]);
             }
         }
@@ -258,6 +258,8 @@
                     }
                 };
                 
+                xhr.send((options.hasContent && options.data) || null);
+                
                 if (!options.async) {
                     onReady();
 
@@ -270,8 +272,6 @@
                 }
 
                 this.xhr = xhr;
-
-                xhr.send((options.hasContent && options.data) || null);
 
                 return {
                     abort: function(callback) {
