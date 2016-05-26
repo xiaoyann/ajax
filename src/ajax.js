@@ -292,6 +292,7 @@
             
             if (hasDone === true) return;
             hasDone = true;
+            done = undefined;
                 
             clearTimeout(timeoutTimer);
             timeoutTimer = undefined;
@@ -323,8 +324,6 @@
             }
 
             if (options.complete) options.complete.call(callbackContext);
-
-            done = null;
         }
 
         var _abort = send(options, done);
