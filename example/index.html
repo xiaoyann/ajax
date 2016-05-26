@@ -8,19 +8,22 @@
     
 <script src="../src/ajax.js"></script>
 <script>
-    var deferred = ajax({
+    var abort = ajax({
         url: './data.json',
         method: 'get',
         data: {
             username: 'ziyan'
         },
-        dataType: 'json'
-    });
+        dataType: 'json',
+        success: function() {
 
-    deferred.success(function(response, statusText, xhr) {
-        console.log(response);
-        console.log(statusText);
-        console.log(xhr);
+        },
+        error: function() {
+
+        },
+        complete: function() {
+
+        }
     });
 </script>
 </body>
