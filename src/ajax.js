@@ -23,8 +23,8 @@
 
     // 检测 reqUrl 是否跨域
     function isCrossDomain(reqUrl) {
-        let rParts = pathInfo(reqUrl);
-        let pParts = pathInfo(document.URL);
+        var rParts = pathInfo(reqUrl);
+        var pParts = pathInfo(document.URL);
         // 1:protocol, 2:domain, 3:port
         return !!rParts && (rParts[1] !== pParts[1] || rParts[2] !== pParts[2] || 
                 (rParts[3] || (rParts[1] === 'http:' ? '80' : '443')) !== (pParts[3] || (pParts[1] === 'http:' ? '80' : '443')));
@@ -36,8 +36,8 @@
     }
 
     function extend(target, source) {
-        for (let key in source) {
-            let copy = source[key];
+        for (var key in source) {
+            var copy = source[key];
             if (copy && typeof copy === 'object') {
                 target[key] = extend(target[key] || {}, copy);
             } else {
@@ -113,7 +113,7 @@
 
 
     // 默认设置
-    const defaultOptions = {
+    var defaultOptions = {
         // 请求地址
         url: '',
         // 请求方法
