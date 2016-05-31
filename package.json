@@ -1,6 +1,7 @@
 {
   "name": "ajax",
   "version": "1.0.0",
+  "main": "src/ajax.js",
   "scripts": {
     "start": "node server.js"
   },
